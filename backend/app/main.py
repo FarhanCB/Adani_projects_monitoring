@@ -77,6 +77,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import os
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
 # Register API Routers
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(projects.router, prefix=settings.API_V1_STR)
@@ -88,12 +92,40 @@ app.include_router(logs.router, prefix=settings.API_V1_STR)
 app.include_router(settings_api.router, prefix=settings.API_V1_STR)
 app.include_router(health.router, prefix=settings.API_V1_STR)
 
+# Frontend Dist Path
+FRONTEND_DIST = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend", "dist")
+)
 
-@app.get("/")
-def root():
-    return {
-        "app": settings.PROJECT_NAME,
-        "version": "2.0.0",
-        "status": "OPERATIONAL",
-        "api_docs": "/docs"
-    }
+# Mount static assets if build exists
+if os.path.isdir(FRONTEND_DIST):
+    assets_dir = os.path.join(FRONTEND_DIST, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Allow API, docs, redoc, openapi.json to pass through if not handled
+        if full_path.startswith("api") or full_path in ["docs", "redoc", "openapi.json"]:
+            return {"detail": "Not Found"}
+        
+        # Check if the requested file directly exists in dist (e.g. favicon, vite.svg)
+        target_file = os.path.join(FRONTEND_DIST, full_path)
+        if full_path and os.path.isfile(target_file):
+            return FileResponse(target_file)
+        
+        # SPA index fallback
+        index_file = os.path.join(FRONTEND_DIST, "index.html")
+        if os.path.isfile(index_file):
+            return FileResponse(index_file)
+        return {"app": settings.PROJECT_NAME, "status": "OPERATIONAL", "api_docs": "/docs"}
+else:
+    @app.get("/")
+    def root():
+        return {
+            "app": settings.PROJECT_NAME,
+            "version": "2.0.0",
+            "status": "OPERATIONAL",
+            "api_docs": "/docs",
+            "notice": "Frontend build not found. Run 'npm run build' inside frontend directory."
+        }

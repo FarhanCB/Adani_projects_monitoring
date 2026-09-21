@@ -5,6 +5,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Adani Website Monitoring & Uptime Analytics"
+    HOST: str = "0.0.0.0"
+    PORT: int = 8008
     API_V1_STR: str = "/api"
     SECRET_KEY: str = "adani-monitoring-super-secret-jwt-key-change-in-prod-2026"
     ALGORITHM: str = "HS256"

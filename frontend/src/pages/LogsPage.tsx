@@ -169,7 +169,7 @@ export const LogsPage: React.FC = () => {
                     <td className="px-5 py-3 font-bold text-slate-900">{log.project_name}</td>
 
                     <td className="px-5 py-3">
-                      <StatusBadge status={log.status} size="sm" showPulse={false} />
+                      <StatusBadge status={log.status} size="sm" />
                     </td>
 
                     <td className="px-5 py-3 font-mono">

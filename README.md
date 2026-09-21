@@ -68,18 +68,43 @@ DEFAULT_MONITOR_INTERVAL_SECONDS=1800
 DAILY_REPORT_RECIPIENTS=farhanvhora@cognitbotz.com,farhan.vhora@adani.com
 ```
 
-### 2. Backend Setup
+### 2. One-Click Setup & Run (Windows Batch File)
 
+Simply double-click or run:
+```bash
+start.bat
+# or
+run.bat
+```
+This batch script will automatically:
+1. Verify Python and Node/npm installations
+2. Create `backend\.venv` if missing and install all `backend/requirements.txt` dependencies
+3. Run `npm install` and `npm run build` in `frontend`
+4. Start the FastAPI server on port **`8008`** serving both the API and frontend UI
+
+### 3. Manual Steps (Alternative)
+
+```bash
+# 1. Build the frontend production bundle
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 2. Start the Backend API & Frontend on Port 8008
+python run_server.py
+```
+*Or directly using uvicorn:*
 ```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python seed_data.py
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8008
 ```
 
-### 3. Frontend Setup
+### 3. Frontend Dev Mode (Optional for Development)
 
 ```bash
 cd frontend
