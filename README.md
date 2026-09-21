@@ -79,10 +79,48 @@ run.bat
 This batch script will automatically:
 1. Verify Python and Node/npm installations
 2. Create `backend\.venv` if missing and install all `backend/requirements.txt` dependencies
-3. Run `npm install` and `npm run build` in `frontend`
-4. Start the FastAPI server on port **`8008`** serving both the API and frontend UI
+3. Run `npm install` and `npm run build` in `frontend` (configured with base path `/dashboard/`)
+4. Start the FastAPI server on port **`8008`** serving both the API and frontend UI under `/dashboard`
 
-### 3. Manual Steps (Alternative)
+### 3. Application URLs (All under `/dashboard`)
+
+- **Web Application**: [http://localhost:8008/dashboard/](http://localhost:8008/dashboard/)
+- **REST API Endpoints**: `http://localhost:8008/dashboard/api/*`
+- **Swagger Documentation**: [http://localhost:8008/dashboard/docs](http://localhost:8008/dashboard/docs)
+- **OpenAPI Schema**: `http://localhost:8008/dashboard/openapi.json`
+
+*(Visiting `http://localhost:8008/` automatically redirects to `/dashboard/`)*
+
+### 4. Deploying Alongside Another Project on Default Port (Nginx Reverse Proxy)
+
+When deploying on a server where another project occupies the default port (port 80 or 443 at `/`), configure Nginx as follows:
+
+```nginx
+server {
+    listen 80;
+    server_name monitoring.yourcompany.com;  # or server IP / domain
+
+    # 1. Existing project on default root
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+    }
+
+    # 2. Adani Monitoring Platform (self-contained under /dashboard)
+    location /dashboard {
+        proxy_pass http://127.0.0.1:8008;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### 5. Manual Setup Steps (Alternative)
 
 ```bash
 # 1. Build the frontend production bundle
@@ -93,23 +131,6 @@ cd ..
 
 # 2. Start the Backend API & Frontend on Port 8008
 python run_server.py
-```
-*Or directly using uvicorn:*
-```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python seed_data.py
-uvicorn app.main:app --host 0.0.0.0 --port 8008
-```
-
-### 3. Frontend Dev Mode (Optional for Development)
-
-```bash
-cd frontend
-npm install
-npm run dev
 ```
 
 ### 4. Standalone Monitoring Script (Optional)

@@ -13,7 +13,7 @@ import {
   Legend,
 } from 'recharts';
 import { Download, Calendar, Activity, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
-import { api } from '../api/client';
+import { api, API_BASE } from '../api/client';
 import { GlobalAnalytics } from '../types';
 
 export const AnalyticsPage: React.FC = () => {
@@ -47,7 +47,7 @@ export const AnalyticsPage: React.FC = () => {
   }, [rangePreset]);
 
   const handleExportCsv = () => {
-    const url = `http://localhost:8000/api/analytics/export/csv?range_preset=${rangePreset}`;
+    const url = `${API_BASE}/analytics/export/csv?range_preset=${rangePreset}`;
     window.open(url, '_blank');
   };
 

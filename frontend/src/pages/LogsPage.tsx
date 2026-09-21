@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Download, Filter, RefreshCw, ChevronLeft, ChevronRight, Activity } from 'lucide-react';
-import { api } from '../api/client';
+import { api, API_BASE } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
 import { MonitoringLog, PaginatedLogs, Project } from '../types';
 
@@ -52,7 +52,7 @@ export const LogsPage: React.FC = () => {
     if (selectedProjectId) params.append('project_id', selectedProjectId);
     if (statusFilter) params.append('status', statusFilter);
 
-    const url = `http://localhost:8000/api/logs/export/csv?${params.toString()}`;
+    const url = `${API_BASE}/logs/export/csv?${params.toString()}`;
     window.open(url, '_blank');
   };
 

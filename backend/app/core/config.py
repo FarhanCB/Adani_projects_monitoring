@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Adani Website Monitoring & Uptime Analytics"
     HOST: str = "0.0.0.0"
     PORT: int = 8008
-    API_V1_STR: str = "/api"
+    API_V1_STR: str = "/dashboard/api"
     SECRET_KEY: str = "adani-monitoring-super-secret-jwt-key-change-in-prod-2026"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours

@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+export const API_BASE = import.meta.env.VITE_API_BASE || '/dashboard/api';
 
 export class ApiError extends Error {
   status: number;
@@ -29,8 +29,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   if (response.status === 401) {
     localStorage.removeItem('adani_auth_token');
     localStorage.removeItem('adani_auth_user');
-    if (!window.location.pathname.includes('/login')) {
-      window.location.href = '/login';
+    // Reload at dashboard root so App displays login form
+    const currentBase = window.location.pathname.startsWith('/dashboard') ? '/dashboard/' : '/';
+    if (window.location.pathname !== currentBase) {
+      window.location.href = currentBase;
     }
   }
 

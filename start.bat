@@ -95,8 +95,9 @@ echo [Step 4/4] Starting Adani Monitoring Server on port 8008...
 echo.
 echo ===============================================================================
 echo   Platform is running!
-echo   Frontend and API:  http://localhost:8008
-echo   API Swagger:       http://localhost:8008/docs
+echo   Web Application:   http://localhost:8008/dashboard/
+echo   REST API Base:     http://localhost:8008/dashboard/api
+echo   Swagger Docs:      http://localhost:8008/dashboard/docs
 echo   Press Ctrl+C to stop the server.
 echo ===============================================================================
 echo.
