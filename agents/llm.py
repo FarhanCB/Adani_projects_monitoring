@@ -21,6 +21,16 @@ DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
 Role = Literal["analysis", "chat"]
 
 
+def _provider() -> str:
+    """Which backend to use for get_llm()/agents_configured()/list_models().
+
+    LLM_PROVIDER=azure  -> Azure OpenAI via the curl bridge (agents/azure_curl.py),
+                            required on the secured Adani VM.
+    LLM_PROVIDER=nvidia (default) -> NVIDIA NIM via langchain's ChatOpenAI, as before.
+    """
+    return (os.getenv("LLM_PROVIDER") or "nvidia").strip().lower()
+
+
 def _ai_from_storage() -> dict[str, Any]:
     try:
         import storage
@@ -50,6 +60,8 @@ def get_base_url() -> str:
 
 
 def get_model_name(role: Role | str = "chat") -> str:
+    if _provider() == "azure":
+        return (os.getenv("AZURE_OPENAI_DEPLOYMENT") or "").strip() or "azure"
     ai = _ai_from_storage()
     if role == "analysis":
         model = (ai.get("analysis_model") or "").strip()
@@ -65,6 +77,10 @@ def get_model_name(role: Role | str = "chat") -> str:
 
 
 def agents_configured() -> bool:
+    if _provider() == "azure":
+        from agents.azure_curl import azure_configured
+
+        return azure_configured()
     return bool(get_api_key())
 
 
@@ -123,7 +139,17 @@ def get_llm(
     role: str = "chat",
     temperature: float = 0.2,
     max_tokens: int = 256,
-) -> ChatOpenAI:
+) -> Any:
+    if _provider() == "azure":
+        from agents.azure_curl import AzureCurlChat, azure_configured
+
+        if not azure_configured():
+            raise RuntimeError(
+                "Azure OpenAI not configured. Set AZURE_OPENAI_KEY, "
+                "AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT in .env"
+            )
+        return AzureCurlChat(temperature=temperature, max_tokens=max_tokens)
+
     api_key = get_api_key()
     if not api_key:
         raise RuntimeError(
@@ -147,6 +173,18 @@ def list_models(
     api_key: str | None = None,
     base_url: str | None = None,
 ) -> list[str]:
+    if _provider() == "azure":
+        from agents.azure_curl import azure_configured, get_deployment_name
+
+        if not azure_configured():
+            raise RuntimeError(
+                "Azure OpenAI not configured. Set AZURE_OPENAI_KEY, "
+                "AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_DEPLOYMENT in .env"
+            )
+        # The curl bridge talks to one fixed deployment (no /models listing
+        # endpoint is used) — surface it as the single "model" choice.
+        return [get_deployment_name()]
+
     key = (api_key or get_api_key() or "").strip()
     if not key:
         raise RuntimeError("API key required to list models.")
