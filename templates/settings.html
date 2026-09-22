@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow"><i data-lucide="sliders-horizontal" class="icon icon-sm"></i> Admin control</p>
+    <h1>Settings</h1>
+    <p class="lede">Configure alert email delivery and AI models for Analyst and Helper.</p>
+  </div>
+  <div class="head-actions">
+    <span class="live-pill">
+      <span class="live-dot"></span>
+      {% if agents_ready %}AI online{% else %}AI offline{% endif %}
+    </span>
+  </div>
+</section>
+
+<div class="settings-tabs" role="tablist">
+  <button type="button" class="settings-tab {% if active_tab == 'email' %}active{% endif %}" data-tab="email" role="tab">
+    <i data-lucide="mail" class="icon icon-sm"></i>Email Config
+  </button>
+  <button type="button" class="settings-tab {% if active_tab == 'ai' %}active{% endif %}" data-tab="ai" role="tab">
+    <i data-lucide="bot" class="icon icon-sm"></i>AI Config
+  </button>
+</div>
+
+<section class="settings-panel settings-panel-tabs">
+  <div class="settings-tab-panel {% if active_tab != 'email' %}hidden{% endif %}" data-panel="email">
+    <form method="post" class="stack-form settings-card" id="email-form">
+      <input type="hidden" name="tab" value="email" />
+      <header class="settings-card-head">
+        <h2><i data-lucide="mail-warning" class="icon"></i> SMTP &amp; recipients</h2>
+        <p class="tiny muted">Emails fire when a service changes to Issue/Down, and again on recovery.</p>
+      </header>
+
+      <label class="toggle-row">
+        <input type="checkbox" name="enabled" {% if email_cfg.enabled %}checked{% endif %} />
+        <span>Enable alert emails</span>
+      </label>
+
+      <div class="form-grid-2">
+        <label>
+          <span>SMTP host</span>
+          <input type="text" name="smtp_host" value="{{ email_cfg.smtp_host }}" placeholder="smtp.company.com" />
+        </label>
+        <label>
+          <span>Port</span>
+          <input type="number" name="smtp_port" value="{{ email_cfg.smtp_port }}" min="1" max="65535" />
+        </label>
+      </div>
+
+      <label>
+        <span>Encryption</span>
+        <select name="encryption">
+          <option value="starttls" {% if email_cfg.encryption == 'starttls' %}selected{% endif %}>STARTTLS</option>
+          <option value="ssl" {% if email_cfg.encryption == 'ssl' %}selected{% endif %}>SSL/TLS</option>
+          <option value="none" {% if email_cfg.encryption == 'none' %}selected{% endif %}>None</option>
+        </select>
+      </label>
+
+      <div class="form-grid-2">
+        <label>
+          <span>SMTP username</span>
+          <input type="text" name="smtp_user" value="{{ email_cfg.smtp_user }}" autocomplete="off" />
+        </label>
+        <label>
+          <span>SMTP password{% if email_cfg.smtp_password_set %} <em class="tiny muted">(saved — leave blank to keep)</em>{% endif %}</span>
+          <input type="password" name="smtp_password" value="" placeholder="{% if email_cfg.smtp_password_set %}••••••••{% else %}Password{% endif %}" autocomplete="new-password" />
+        </label>
+      </div>
+
+      <label>
+        <span>From address</span>
+        <input type="email" name="from_address" value="{{ email_cfg.from_address }}" placeholder="ping-tester@company.com" />
+      </label>
+
+      <label>
+        <span>Alert recipients (comma-separated)</span>
+        <textarea name="recipients" rows="3" placeholder="ops@company.com, lead@company.com">{{ email_cfg.recipients_text }}</textarea>
+      </label>
+
+      <div class="form-actions">
+        <button type="submit" name="action" value="save_email" class="btn btn-primary">
+          <i data-lucide="save" class="icon"></i>Save email config
+        </button>
+        <button type="submit" name="action" value="test_email" class="btn btn-ghost">
+          <i data-lucide="send" class="icon"></i>Send test email
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="settings-tab-panel {% if active_tab != 'ai' %}hidden{% endif %}" data-panel="ai">
+    <form method="post" class="stack-form settings-card" id="ai-form">
+      <input type="hidden" name="tab" value="ai" />
+      <input type="hidden" name="action" value="save_ai" />
+      <header class="settings-card-head">
+        <h2><i data-lucide="cpu" class="icon"></i> Shared API · separate models</h2>
+        <p class="tiny muted">One API key and base URL. Pick different models for Analysis and Chatbot.</p>
+      </header>
+
+      <label>
+        <span>API key{% if ai_cfg.api_key_set %} <em class="tiny muted">(saved {{ ai_cfg.api_key_masked }} — leave blank to keep)</em>{% endif %}</span>
+        <input type="password" name="api_key" id="ai-api-key" value="" placeholder="{% if ai_cfg.api_key_set %}••••••••{% else %}nvapi-...{% endif %}" autocomplete="off" />
+      </label>
+
+      <label>
+        <span>Base URL</span>
+        <input type="url" name="base_url" id="ai-base-url" value="{{ ai_cfg.base_url }}" placeholder="https://integrate.api.nvidia.com/v1" />
+      </label>
+
+      <div class="ai-fetch-row">
+        <button type="button" class="btn btn-ghost" id="ai-fetch-models">
+          <i data-lucide="refresh-cw" class="icon"></i>Fetch models
+        </button>
+        <span class="tiny muted" id="ai-models-status">Uses GET /models on the base URL.</span>
+      </div>
+
+      <div class="form-grid-2">
+        <label>
+          <span>Analysis model</span>
+          <select name="analysis_model" id="ai-analysis-model">
+            {% if ai_cfg.analysis_model %}
+            <option value="{{ ai_cfg.analysis_model }}" selected>{{ ai_cfg.analysis_model }}</option>
+            {% else %}
+            <option value="">— Fetch models —</option>
+            {% endif %}
+          </select>
+        </label>
+        <label>
+          <span>Chatbot model</span>
+          <select name="chat_model" id="ai-chat-model">
+            {% if ai_cfg.chat_model %}
+            <option value="{{ ai_cfg.chat_model }}" selected>{{ ai_cfg.chat_model }}</option>
+            {% else %}
+            <option value="">— Fetch models —</option>
+            {% endif %}
+          </select>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          <i data-lucide="save" class="icon"></i>Save AI config
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <aside class="settings-note">
+    <h2><i data-lucide="shield" class="icon"></i>Admin account</h2>
+    <p>Signed in as <strong>{{ admin_user }}</strong>. Change password below.</p>
+    <form method="post" class="stack-form narrow">
+      <input type="hidden" name="tab" value="{{ active_tab }}" />
+      <input type="hidden" name="action" value="change_password" />
+      <label>
+        <span>Current password</span>
+        <input type="password" name="current_password" required autocomplete="current-password" />
+      </label>
+      <label>
+        <span>New password</span>
+        <input type="password" name="new_password" minlength="6" required autocomplete="new-password" />
+      </label>
+      <label>
+        <span>Confirm</span>
+        <input type="password" name="confirm_password" minlength="6" required autocomplete="new-password" />
+      </label>
+      <button type="submit" class="btn btn-ghost">
+        <i data-lucide="key-round" class="icon"></i>Update password
+      </button>
+    </form>
+
+    <h2><i data-lucide="timer" class="icon"></i>Checks</h2>
+    <p>Background monitoring every <strong>{{ check_interval }}s</strong>.</p>
+    <h2><i data-lucide="bell-ring" class="icon"></i>Alert subject</h2>
+    <p class="tiny"><code>{Project} — Issue|Down</code> · recovery <code>{Project} — Recovered</code></p>
+  </aside>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  document.querySelectorAll(".settings-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.getAttribute("data-tab");
+      document.querySelectorAll(".settings-tab").forEach((t) => t.classList.toggle("active", t === tab));
+      document.querySelectorAll("[data-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.getAttribute("data-panel") !== name);
+      });
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", name);
+      window.history.replaceState({}, "", url);
+      if (window.lucide) lucide.createIcons();
+    });
+  });
+
+  function fillSelect(select, models, current) {
+    const keep = current || select.value || "";
+    select.innerHTML = "";
+    if (!models.length) {
+      const opt = document.createElement("option");
+      opt.value = keep;
+      opt.textContent = keep || "— no models —";
+      select.appendChild(opt);
+      return;
+    }
+    models.forEach((id) => {
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = id;
+      if (id === keep) opt.selected = true;
+      select.appendChild(opt);
+    });
+    if (keep && !models.includes(keep)) {
+      const opt = document.createElement("option");
+      opt.value = keep;
+      opt.textContent = keep + " (saved)";
+      opt.selected = true;
+      select.prepend(opt);
+    }
+  }
+
+  const fetchBtn = document.getElementById("ai-fetch-models");
+  if (fetchBtn) {
+    fetchBtn.addEventListener("click", async () => {
+      const status = document.getElementById("ai-models-status");
+      status.textContent = "Fetching models…";
+      try {
+        const res = await fetch(window.API_URLS.aiModels, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_key: document.getElementById("ai-api-key").value,
+            base_url: document.getElementById("ai-base-url").value,
+          }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "Failed");
+        fillSelect(document.getElementById("ai-analysis-model"), data.models, "{{ ai_cfg.analysis_model }}");
+        fillSelect(document.getElementById("ai-chat-model"), data.models, "{{ ai_cfg.chat_model }}");
+        status.textContent = data.models.length + " models loaded.";
+      } catch (err) {
+        status.textContent = "Error: " + (err.message || err);
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

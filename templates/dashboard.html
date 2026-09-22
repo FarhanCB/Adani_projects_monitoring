@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block title %}App health — {{ app_name }}{% endblock %}
+{% block content %}
+{% set fleet_up = namespace(v=0) %}
+{% set fleet_down = namespace(v=0) %}
+{% set fleet_unknown = namespace(v=0) %}
+{% set fleet_projects_ok = namespace(v=0) %}
+{% set fleet_projects_bad = namespace(v=0) %}
+{% set fleet_projects_pending = namespace(v=0) %}
+{% set fleet_projects_empty = namespace(v=0) %}
+{% for card in cards %}
+  {% set h = card.health %}
+  {% set fleet_up.v = fleet_up.v + h.up %}
+  {% set fleet_down.v = fleet_down.v + h.down %}
+  {% set fleet_unknown.v = fleet_unknown.v + h.unknown %}
+  {% if h.total == 0 %}
+    {% set fleet_projects_empty.v = fleet_projects_empty.v + 1 %}
+  {% elif h.down > 0 %}
+    {% set fleet_projects_bad.v = fleet_projects_bad.v + 1 %}
+  {% elif h.unknown > 0 %}
+    {% set fleet_projects_pending.v = fleet_projects_pending.v + 1 %}
+  {% else %}
+    {% set fleet_projects_ok.v = fleet_projects_ok.v + 1 %}
+  {% endif %}
+{% endfor %}
+{% if fleet_projects_bad.v > 0 %}
+  {% set mood = 'attention' %}
+  {% set mood_title = 'Some apps need attention' %}
+  {% set mood_text = 'One or more apps are not working as expected. Scroll down to see which ones and who to contact.' %}
+{% elif fleet_projects_pending.v > 0 or fleet_unknown.v > 0 %}
+  {% set mood = 'checking' %}
+  {% set mood_title = 'Still checking a few apps' %}
+  {% set mood_text = 'Most look fine. A few are still being checked — this page updates by itself.' %}
+{% elif cards %}
+  {% set mood = 'good' %}
+  {% set mood_title = 'Everything looks good' %}
+  {% set mood_text = 'All monitored apps are responding normally right now.' %}
+{% else %}
+  {% set mood = 'empty' %}
+  {% set mood_title = 'Nothing to watch yet' %}
+  {% set mood_text = 'Add an app or project to start monitoring.' %}
+{% endif %}
+
+<section class="page-head simple-head">
+  <div>
+    <p class="eyebrow"><i data-lucide="heart-pulse" class="icon icon-sm"></i> Simple health board</p>
+    <h1>How are our apps doing?</h1>
+    <p class="lede">A live snapshot for everyone — no technical knowledge needed. Green means fine, orange means wait, red means please look.</p>
+  </div>
+  <div class="head-actions">
+    <span class="live-pill" title="This page updates automatically">
+      <span class="live-dot"></span> Updating live
+      <span class="live-clock" id="live-clock" data-live-clock></span>
+    </span>
+    <button type="button" class="btn btn-primary" data-open="modal-new-project">
+      <i data-lucide="plus" class="icon"></i>Add app
+    </button>
+  </div>
+</section>
+
+{% if cards %}
+<section class="status-banner status-{{ mood }}" id="status-banner" aria-live="polite">
+  <div class="status-banner-icon">
+    {% if mood == 'attention' %}
+    <i data-lucide="triangle-alert" class="icon icon-lg"></i>
+    {% elif mood == 'checking' %}
+    <i data-lucide="clock" class="icon icon-lg"></i>
+    {% else %}
+    <i data-lucide="check-circle-2" class="icon icon-lg"></i>
+    {% endif %}
+  </div>
+  <div>
+    <h2 data-mood-title>{{ mood_title }}</h2>
+    <p data-mood-text>{{ mood_text }}</p>
+  </div>
+  <ul class="status-legend" aria-label="Colour guide">
+    <li><span class="swatch swatch-ok"></span> Working fine</li>
+    <li><span class="swatch swatch-wait"></span> Still checking</li>
+    <li><span class="swatch swatch-bad"></span> Needs attention</li>
+  </ul>
+</section>
+
+<section class="simple-summary" id="fleet-strip">
+  <article class="summary-tile summary-ok">
+    <span class="label"><i data-lucide="smile" class="icon icon-sm"></i>Working fine</span>
+    <strong data-fleet-ok>{{ fleet_projects_ok.v }}</strong>
+    <p>apps with no problems</p>
+  </article>
+  <article class="summary-tile summary-bad">
+    <span class="label"><i data-lucide="frown" class="icon icon-sm"></i>Need attention</span>
+    <strong class="text-down" data-fleet-bad>{{ fleet_projects_bad.v }}</strong>
+    <p>apps with a problem right now</p>
+  </article>
+  <article class="summary-tile summary-wait">
+    <span class="label"><i data-lucide="loader" class="icon icon-sm"></i>Still checking</span>
+    <strong data-fleet-pending>{{ fleet_projects_pending.v }}</strong>
+    <p>waiting for first result</p>
+  </article>
+  <article class="summary-tile summary-total">
+    <span class="label"><i data-lucide="layout-grid" class="icon icon-sm"></i>Total apps</span>
+    <strong data-fleet-projects>{{ cards|length }}</strong>
+    <p><span data-fleet-down>{{ fleet_down.v }}</span> links not working · <span data-fleet-up>{{ fleet_up.v }}</span> ok</p>
+  </article>
+</section>
+
+<details class="charts-details">
+  <summary>
+    <i data-lucide="bar-chart-3" class="icon icon-sm"></i>
+    Show visual charts <span class="tiny muted">(optional — for deeper view)</span>
+  </summary>
+  <section class="charts-panel" id="charts-panel" data-charts-root
+    data-init-up="{{ fleet_up.v }}"
+    data-init-down="{{ fleet_down.v }}"
+    data-init-unknown="{{ fleet_unknown.v }}">
+    <article class="chart-card chart-card-donut">
+      <header>
+        <h3><i data-lucide="pie-chart" class="icon icon-sm"></i> Overall picture</h3>
+        <p class="tiny muted">How many links are fine vs not</p>
+      </header>
+      <div class="chart-wrap">
+        <canvas id="chart-fleet-donut" aria-label="Overall health chart"></canvas>
+      </div>
+    </article>
+    <article class="chart-card chart-card-bar">
+      <header>
+        <h3><i data-lucide="bar-chart-3" class="icon icon-sm"></i> By app</h3>
+        <p class="tiny muted">Working vs problem links per app</p>
+      </header>
+      <div class="chart-wrap chart-wrap-wide">
+        <canvas id="chart-project-bars" aria-label="Per app bars"></canvas>
+      </div>
+    </article>
+    <article class="chart-card chart-card-line">
+      <header>
+        <h3><i data-lucide="activity" class="icon icon-sm"></i> Problems over time</h3>
+        <p class="tiny muted">While this page stays open</p>
+      </header>
+      <div class="chart-wrap">
+        <canvas id="chart-down-trend" aria-label="Problems trend"></canvas>
+      </div>
+    </article>
+  </section>
+</details>
+
+{% if fleet_projects_bad.v > 0 %}
+<section class="board-section">
+  <header class="board-section-head">
+    <h2><i data-lucide="triangle-alert" class="icon"></i> Needs attention first</h2>
+    <p>Start here — these apps reported a problem.</p>
+  </header>
+</section>
+{% endif %}
+
+<div class="insight-grid plain-grid" id="insight-grid">
+  {% for card in cards %}
+  {% set p = card.project %}
+  {% set h = card.health %}
+  {% if h.total == 0 %}
+    {% set state = 'empty' %}
+    {% set plain = 'Not set up' %}
+  {% elif h.down > 0 %}
+    {% set state = 'down' %}
+    {% set plain = 'Needs attention' %}
+  {% elif h.unknown > 0 %}
+    {% set state = 'pending' %}
+    {% set plain = 'Still checking' %}
+  {% else %}
+    {% set state = 'ok' %}
+    {% set plain = 'Working fine' %}
+  {% endif %}
+  <article class="insight-card plain-card state-{{ state }}{% if h.down > 0 %} has-down{% endif %}" data-project-id="{{ p.id }}" data-insight-card data-state="{{ state }}">
+    <header class="insight-card-head">
+      <div>
+        <p class="plain-status plain-status-{{ state }}" data-plain-status>{{ plain }}</p>
+        <h2>{{ p.name }}</h2>
+        {% if p.description %}
+        <p class="tile-desc">{{ p.description }}</p>
+        {% endif %}
+      </div>
+      <div class="insight-head-right">
+        <div class="mini-chart-wrap" title="Quick health mix">
+          <canvas class="mini-donut" data-mini-donut width="64" height="64"
+            data-up="{{ h.up }}" data-down="{{ h.down }}" data-unknown="{{ h.unknown }}"></canvas>
+        </div>
+        {% if state == 'empty' %}
+        <span class="badge badge-muted" data-project-badge><i data-lucide="circle-dashed" class="icon"></i>Not set up</span>
+        {% elif state == 'down' %}
+        <span class="badge badge-down" data-project-badge><i data-lucide="triangle-alert" class="icon"></i>{{ h.down }} problem{{ '' if h.down == 1 else 's' }}</span>
+        {% elif state == 'pending' %}
+        <span class="badge badge-warn" data-project-badge><i data-lucide="clock" class="icon"></i>Still checking</span>
+        {% else %}
+        <span class="badge badge-ok" data-project-badge><i data-lucide="check" class="icon"></i>Working fine</span>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="insight-stats plain-stats">
+      <div class="stat-ok"><span class="label">Working</span><strong data-health-up>{{ h.up }}</strong></div>
+      <div class="stat-bad"><span class="label">Problems</span><strong data-health-down class="text-down">{{ h.down }}</strong></div>
+      <div class="stat-wait"><span class="label">Checking</span><strong data-health-unknown>{{ h.unknown }}</strong></div>
+      <div><span class="label">Links watched</span><strong data-health-total>{{ h.total }}</strong></div>
+    </div>
+
+    {% if p.project_url or p.developers %}
+    <div class="insight-meta-row plain-meta">
+      {% if p.project_url %}
+      <a class="btn btn-ghost btn-tiny open-app-btn" href="{{ p.project_url }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+        <i data-lucide="external-link" class="icon icon-sm"></i>Open app
+      </a>
+      {% endif %}
+      {% if p.developers %}
+      <div class="dev-chips compact" title="People to contact">
+        <span class="tiny muted contact-label"><i data-lucide="users" class="icon icon-sm"></i>Contact</span>
+        {% for d in p.developers[:4] %}
+          {% if d.email %}
+          <a class="dev-chip" href="mailto:{{ d.email }}?subject={{ p.name|urlencode }}%20status" onclick="event.stopPropagation()">
+            <i data-lucide="mail" class="icon icon-sm"></i>{{ d.name or d.email }}
+          </a>
+          {% else %}
+          <span class="dev-chip"><i data-lucide="user" class="icon icon-sm"></i>{{ d.name }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="insight-services" data-service-list>
+      {% if p.urls %}
+        {% for entry in p.urls %}
+        {% set r = entry.last_result %}
+        {% set a = entry.last_analysis %}
+        <div class="insight-service {% if r and not r.ok %}is-error{% elif r and r.ok %}is-ok{% endif %}" data-url-id="{{ entry.id }}">
+          <div class="insight-service-top">
+            <div class="service-title-block">
+              <span class="service-name" title="{{ entry.url }}">
+                <i data-lucide="globe" class="icon icon-sm"></i>{{ entry.name }}
+              </span>
+            </div>
+            {% if not entry.enabled %}
+            <span class="badge badge-muted" data-status-badge><i data-lucide="pause" class="icon"></i>Paused</span>
+            {% elif not r %}
+            <span class="badge badge-muted" data-status-badge><i data-lucide="clock" class="icon"></i>Still checking</span>
+            {% elif r.ok %}
+            <span class="badge badge-ok" data-status-badge><i data-lucide="check" class="icon"></i>Working fine</span>
+            {% elif r.label == 'issue' %}
+            <span class="badge badge-warn" data-status-badge><i data-lucide="alert-triangle" class="icon"></i>Having a problem</span>
+            {% else %}
+            <span class="badge badge-down" data-status-badge><i data-lucide="unplug" class="icon"></i>Not responding</span>
+            {% endif %}
+          </div>
+          <div class="insight-service-detail">
+            <span class="status-msg {% if not r or r.ok %}muted{% endif %}" data-status-msg>
+              {% if not r %}Waiting for the first check…
+              {% elif r.ok %}Responding normally
+              {% elif r.label == 'issue' %}Opened, but the response was unexpected
+              {% else %}Could not reach this page right now
+              {% endif %}
+            </span>
+            <span class="endpoint-metrics">
+              <span data-latency class="speed-hint"><i data-lucide="gauge" class="icon icon-sm"></i>{% if r and r.response_ms is not none %}{% if r.response_ms < 800 %}Fast{% elif r.response_ms < 2500 %}OK speed{% else %}Slow{% endif %}{% else %}—{% endif %}</span>
+              <span class="muted" data-checked><i data-lucide="calendar-clock" class="icon icon-sm"></i>{% if r %}{{ r.checked_at }}{% else %}—{% endif %}</span>
+            </span>
+          </div>
+          {% if a and r and not r.ok %}
+          <div class="insight-analysis" data-analysis-box>
+            <div class="analysis-head">
+              <span class="badge badge-warn"><i data-lucide="sparkles" class="icon"></i>Simple explanation</span>
+            </div>
+            <p class="analysis-summary" data-analysis-summary>{{ a.summary }}</p>
+            {% if a.likely_cause %}
+            <p class="tiny" data-analysis-cause><strong>Likely reason:</strong> {{ a.likely_cause }}</p>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="insight-analysis" data-analysis-box hidden></div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="tiny muted service-empty">No links are being watched for this app yet.</p>
+      {% endif %}
+    </div>
+
+    <footer class="insight-card-foot">
+      <form method="post" action="{{ url_for('check_project_now', project_id=p.id) }}?next=dashboard" onclick="event.stopPropagation()">
+        <button type="submit" class="btn btn-secondary btn-tiny">
+          <i data-lucide="refresh-cw" class="icon icon-sm"></i>Check again
+        </button>
+      </form>
+      <a class="btn btn-ghost btn-tiny" href="{{ url_for('project_detail', project_id=p.id) }}">
+        <i data-lucide="settings-2" class="icon icon-sm"></i>Details
+      </a>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon"><i data-lucide="folder-plus" class="icon icon-lg"></i></div>
+  <h2>No apps yet</h2>
+  <p>Add an app to start watching whether it is working. Anyone on the team can read this board.</p>
+  <button type="button" class="btn btn-primary" data-open="modal-new-project">
+    <i data-lucide="plus" class="icon"></i>Add your first app
+  </button>
+</div>
+{% endif %}
+
+<dialog id="modal-new-project" class="modal modal-wide">
+  <form method="post" action="{{ url_for('create_project') }}" class="modal-body">
+    <header>
+      <h2><i data-lucide="folder-plus" class="icon"></i>Add an app</h2>
+      <button type="button" class="icon-close" data-close aria-label="Close"><i data-lucide="x" class="icon icon-sm"></i></button>
+    </header>
+    <label>
+      <span>App / project name</span>
+      <input type="text" name="name" required maxlength="120" placeholder="e.g. Leave portal" />
+    </label>
+    <label>
+      <span>Website link <em>(optional)</em></span>
+      <input type="url" name="project_url" placeholder="https://…" />
+    </label>
+    <label>
+      <span>What is this app for?</span>
+      <textarea name="description" rows="2" maxlength="500" placeholder="Short description in plain words"></textarea>
+    </label>
+    <div class="dev-editor" data-dev-editor>
+      <div class="dev-editor-head">
+        <span><i data-lucide="users" class="icon icon-sm"></i> People to contact</span>
+        <button type="button" class="btn btn-tiny" data-add-dev><i data-lucide="user-plus" class="icon icon-sm"></i>Add</button>
+      </div>
+      <div class="dev-rows" data-dev-rows>
+        <div class="dev-row">
+          <input type="text" name="developer_name" placeholder="Name" />
+          <input type="email" name="developer_email" placeholder="email@company.com" />
+        </div>
+      </div>
+    </div>
+    <div class="service-editor" data-service-editor>
+      <div class="dev-editor-head">
+        <span><i data-lucide="link" class="icon icon-sm"></i> Links to watch</span>
+        <button type="button" class="btn btn-tiny" data-add-service><i data-lucide="plus" class="icon icon-sm"></i>Add link</button>
+      </div>
+      <p class="tiny muted service-editor-hint">Add the important pages or health links. We check them automatically every {{ check_interval }} seconds.</p>
+      <div class="service-rows" data-service-rows>
+        <div class="service-row">
+          <input type="text" name="service_name" placeholder="Friendly name (e.g. Home page)" />
+          <input type="url" name="service_url" placeholder="https://…" />
+          <input type="number" name="service_expected" value="200" min="100" max="599" title="Expected status" />
+          <input type="number" name="service_timeout" value="10" min="1" max="120" title="Timeout seconds" />
+        </div>
+      </div>
+    </div>
+    <footer class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary"><i data-lucide="check" class="icon"></i>Save app</button>
+    </footer>
+  </form>
+</dialog>
+{% endblock %}

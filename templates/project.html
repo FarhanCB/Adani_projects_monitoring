@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+  <div>
+    <p class="eyebrow">
+      <a href="{{ url_for('dashboard') }}"><i data-lucide="arrow-left" class="icon icon-sm"></i>Projects</a>
+      / detail
+    </p>
+    <h1>{{ project.name }}</h1>
+    {% if project.description %}
+    <p class="lede">{{ project.description }}</p>
+    {% else %}
+    <p class="lede">Monitor endpoints for this project. Every enabled microservice is pinged every {{ check_interval }}s.</p>
+    {% endif %}
+  </div>
+  <div class="head-actions">
+    <form method="post" action="{{ url_for('check_project_now', project_id=project.id) }}">
+      <button type="submit" class="btn btn-secondary">
+        <i data-lucide="refresh-cw" class="icon"></i>Check all now
+      </button>
+    </form>
+    <button type="button" class="btn btn-ghost" data-open="modal-edit-project">
+      <i data-lucide="pencil" class="icon"></i>Edit
+    </button>
+    <button type="button" class="btn btn-primary" data-open="modal-add-url">
+      <i data-lucide="layers" class="icon"></i>Add services
+    </button>
+  </div>
+</section>
+
+<section class="project-meta-panel">
+  <div>
+    <span class="label"><i data-lucide="link" class="icon icon-sm"></i> Project URL</span>
+    {% if project.project_url %}
+    <a href="{{ project.project_url }}" target="_blank" rel="noopener">{{ project.project_url }}</a>
+    {% else %}
+    <span class="muted">Not set</span>
+    {% endif %}
+  </div>
+  <div>
+    <span class="label"><i data-lucide="users" class="icon icon-sm"></i> Developers</span>
+    {% if project.developers %}
+    <div class="dev-chips">
+      {% for d in project.developers %}
+        {% if d.email %}
+        <a class="dev-chip" href="mailto:{{ d.email }}?subject={{ project.name|urlencode }}%20downtime">
+          <i data-lucide="mail" class="icon icon-sm"></i>{{ d.name or d.email }} · {{ d.email }}
+        </a>
+        {% else %}
+        <span class="dev-chip"><i data-lucide="user" class="icon icon-sm"></i>{{ d.name }}</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <span class="muted">No developers listed</span>
+    {% endif %}
+  </div>
+</section>
+
+<div class="health-strip" data-project-id="{{ project.id }}">
+  <div>
+    <span class="label"><i data-lucide="check-circle-2" class="icon icon-sm"></i>Healthy</span>
+    <strong data-health-up>{{ health.up }}</strong>
+  </div>
+  <div>
+    <span class="label"><i data-lucide="triangle-alert" class="icon icon-sm"></i>Down / issue</span>
+    <strong data-health-down>{{ health.down }}</strong>
+  </div>
+  <div>
+    <span class="label"><i data-lucide="clock" class="icon icon-sm"></i>Pending</span>
+    <strong data-health-unknown>{{ health.unknown }}</strong>
+  </div>
+  <div>
+    <span class="label"><i data-lucide="radio" class="icon icon-sm"></i>Enabled</span>
+    <strong data-health-total>{{ health.total }}</strong>
+  </div>
+</div>
+
+{% if project.urls %}
+<div class="endpoint-list" id="url-table">
+  {% for entry in project.urls %}
+  {% set r = entry.last_result %}
+  {% set a = entry.last_analysis %}
+  <article class="endpoint-card {% if not entry.enabled %}row-disabled{% endif %}" data-url-id="{{ entry.id }}">
+    <div class="endpoint-main">
+      <div>
+        <h3 class="cell-title"><i data-lucide="server" class="icon"></i>{{ entry.name }}</h3>
+        <code class="url-code">{{ entry.url }}</code>
+        {% if not entry.enabled %}<div class="tiny muted">Paused</div>{% endif %}
+      </div>
+      <div class="endpoint-status status-cell">
+        <div class="muted tiny">Expected <code>{{ entry.expected_status }}</code></div>
+        {% if not r %}
+        <span class="badge badge-muted" data-status-badge><i data-lucide="clock" class="icon"></i>Waiting</span>
+        <div class="status-msg muted" data-status-msg>Not checked yet</div>
+        {% elif r.ok %}
+        <span class="badge badge-ok" data-status-badge><i data-lucide="check" class="icon"></i>OK</span>
+        <div class="status-msg" data-status-msg>{{ r.message }}</div>
+        {% elif r.label == 'issue' %}
+        <span class="badge badge-warn" data-status-badge><i data-lucide="alert-triangle" class="icon"></i>Issue</span>
+        <div class="status-msg" data-status-msg>{{ r.message }}</div>
+        {% else %}
+        <span class="badge badge-down" data-status-badge><i data-lucide="unplug" class="icon"></i>Down</span>
+        <div class="status-msg" data-status-msg>{{ r.message }}</div>
+        {% endif %}
+        <div class="endpoint-metrics">
+          <span data-latency><i data-lucide="zap" class="icon icon-sm"></i>{% if r and r.response_ms is not none %}{{ r.response_ms }} ms{% else %}—{% endif %}</span>
+          <span class="muted" data-checked><i data-lucide="calendar-clock" class="icon icon-sm"></i>{% if r %}{{ r.checked_at }}{% else %}—{% endif %}</span>
+        </div>
+      </div>
+      <div class="row-actions">
+        <details class="history-pop">
+          <summary><i data-lucide="history" class="icon icon-sm"></i>History</summary>
+          <div class="history-list">
+            {% if entry.history %}
+              {% for h in entry.history %}
+              <div class="history-item {% if h.ok %}ok{% else %}bad{% endif %}">
+                <span>{{ h.checked_at }}</span>
+                <span>{{ h.message }}</span>
+                <span>{% if h.response_ms is not none %}{{ h.response_ms }} ms{% else %}—{% endif %}</span>
+              </div>
+              {% endfor %}
+            {% else %}
+              <p class="muted">No history yet.</p>
+            {% endif %}
+          </div>
+        </details>
+        <form method="post" action="{{ url_for('check_url_now', project_id=project.id, url_id=entry.id) }}">
+          <button type="submit" class="btn btn-tiny"><i data-lucide="refresh-cw" class="icon icon-sm"></i>Check</button>
+        </form>
+        <button type="button" class="btn btn-tiny" data-open="modal-edit-url-{{ entry.id }}">
+          <i data-lucide="pencil" class="icon icon-sm"></i>Edit
+        </button>
+        <form method="post" action="{{ url_for('delete_url', project_id=project.id, url_id=entry.id) }}" onsubmit="return confirm('Remove this URL?');">
+          <button type="submit" class="btn btn-tiny btn-danger"><i data-lucide="trash-2" class="icon icon-sm"></i>Remove</button>
+        </form>
+      </div>
+    </div>
+
+    {% if a and r and not r.ok %}
+    <div class="analysis-card" data-analysis>
+      <div class="analysis-head">
+        <span class="badge badge-warn"><i data-lucide="brain" class="icon"></i>Analyst</span>
+        <span class="muted tiny">{{ a.analyzed_at }}</span>
+      </div>
+      <p class="analysis-summary">{{ a.summary }}</p>
+      <p><strong>Likely cause:</strong> {{ a.likely_cause }}</p>
+      {% if a.next_steps %}
+      <ul class="analysis-steps">
+        {% for step in a.next_steps %}
+        <li>{{ step }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if a.notify %}
+      <div class="dev-chips">
+        {% for email in a.notify %}
+        <a class="dev-chip" href="mailto:{{ email }}?subject={{ project.name|urlencode }}%20—%20{{ entry.name|urlencode }}%20down">
+          <i data-lucide="mail" class="icon icon-sm"></i>Notify {{ email }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </article>
+
+  <dialog id="modal-edit-url-{{ entry.id }}" class="modal">
+    <form method="post" action="{{ url_for('edit_url', project_id=project.id, url_id=entry.id) }}" class="modal-body">
+      <header>
+        <h2><i data-lucide="pencil" class="icon"></i>Edit URL</h2>
+        <button type="button" class="icon-close" data-close aria-label="Close"><i data-lucide="x" class="icon icon-sm"></i></button>
+      </header>
+      <label>
+        <span>Name</span>
+        <input type="text" name="name" value="{{ entry.name }}" required maxlength="120" />
+      </label>
+      <label>
+        <span>URL</span>
+        <input type="url" name="url" value="{{ entry.url }}" required />
+      </label>
+      <div class="form-row">
+        <label>
+          <span>Expected status</span>
+          <input type="number" name="expected_status" value="{{ entry.expected_status }}" min="100" max="599" required />
+        </label>
+        <label>
+          <span>Timeout (seconds)</span>
+          <input type="number" name="timeout_seconds" value="{{ entry.timeout_seconds }}" min="1" max="120" required />
+        </label>
+      </div>
+      <label class="check-line">
+        <input type="checkbox" name="enabled" {% if entry.enabled %}checked{% endif %} />
+        <span>Enabled for background checks</span>
+      </label>
+      <footer class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn-primary"><i data-lucide="save" class="icon"></i>Save changes</button>
+      </footer>
+    </form>
+  </dialog>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon"><i data-lucide="layers" class="icon icon-lg"></i></div>
+  <h2>No microservices yet</h2>
+  <p>Add multiple API endpoints for this project. Each enabled service is pinged every {{ check_interval }}s.</p>
+  <button type="button" class="btn btn-primary" data-open="modal-add-url">
+    <i data-lucide="plus" class="icon"></i>Add services
+  </button>
+</div>
+{% endif %}
+
+<dialog id="modal-add-url" class="modal modal-wide">
+  <form method="post" action="{{ url_for('add_url', project_id=project.id) }}" class="modal-body">
+    <header>
+      <h2><i data-lucide="layers" class="icon"></i>Add microservices</h2>
+      <button type="button" class="icon-close" data-close aria-label="Close"><i data-lucide="x" class="icon icon-sm"></i></button>
+    </header>
+    <p class="tiny muted">Add one or many API service endpoints. They are checked immediately, then every {{ check_interval }}s in the background.</p>
+    <div class="service-editor" data-service-editor>
+      <div class="dev-editor-head">
+        <span><i data-lucide="server" class="icon icon-sm"></i> Services</span>
+        <button type="button" class="btn btn-tiny" data-add-service><i data-lucide="plus" class="icon icon-sm"></i>Add another</button>
+      </div>
+      <div class="service-row-labels muted tiny">
+        <span>Name</span><span>Endpoint URL</span><span>Expect</span><span>Timeout</span>
+      </div>
+      <div class="service-rows" data-service-rows>
+        <div class="service-row">
+          <input type="text" name="service_name" placeholder="Auth API" />
+          <input type="url" name="service_url" placeholder="https://api.example.com/auth/health" />
+          <input type="number" name="service_expected" value="200" min="100" max="599" title="Expected HTTP status" />
+          <input type="number" name="service_timeout" value="10" min="1" max="120" title="Timeout seconds" />
+        </div>
+      </div>
+    </div>
+    <footer class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary"><i data-lucide="radar" class="icon"></i>Add &amp; check all</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog id="modal-edit-project" class="modal modal-wide">
+  <form method="post" action="{{ url_for('edit_project', project_id=project.id) }}" class="modal-body">
+    <header>
+      <h2><i data-lucide="pencil" class="icon"></i>Edit project</h2>
+      <button type="button" class="icon-close" data-close aria-label="Close"><i data-lucide="x" class="icon icon-sm"></i></button>
+    </header>
+    <label>
+      <span>Project name</span>
+      <input type="text" name="name" value="{{ project.name }}" required maxlength="120" />
+    </label>
+    <label>
+      <span>Project URL</span>
+      <input type="url" name="project_url" value="{{ project.project_url or '' }}" placeholder="https://…" />
+    </label>
+    <label>
+      <span>Description</span>
+      <textarea name="description" rows="3" maxlength="500">{{ project.description }}</textarea>
+    </label>
+    <div class="dev-editor" data-dev-editor>
+      <div class="dev-editor-head">
+        <span><i data-lucide="users" class="icon icon-sm"></i> Developers</span>
+        <button type="button" class="btn btn-tiny" data-add-dev><i data-lucide="user-plus" class="icon icon-sm"></i>Add</button>
+      </div>
+      <div class="dev-rows" data-dev-rows>
+        {% if project.developers %}
+          {% for d in project.developers %}
+          <div class="dev-row">
+            <input type="text" name="developer_name" value="{{ d.name }}" placeholder="Name" />
+            <input type="email" name="developer_email" value="{{ d.email }}" placeholder="email@company.com" />
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="dev-row">
+            <input type="text" name="developer_name" placeholder="Name" />
+            <input type="email" name="developer_email" placeholder="email@company.com" />
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <footer class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary"><i data-lucide="save" class="icon"></i>Save</button>
+    </footer>
+  </form>
+</dialog>
+
+<form class="danger-zone" method="post" action="{{ url_for('delete_project', project_id=project.id) }}" onsubmit="return confirm('Delete this project and all of its URLs?');">
+  <div>
+    <strong><i data-lucide="trash-2" class="icon icon-sm"></i> Delete project</strong>
+    <p class="muted">Removes this project and every URL under it from data.json.</p>
+  </div>
+  <button type="submit" class="btn btn-danger"><i data-lucide="trash-2" class="icon"></i>Delete project</button>
+</form>
+{% endblock %}

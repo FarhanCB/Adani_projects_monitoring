@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=9" />
+  <script src="https://unpkg.com/lucide@0.468.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script>
+    window.API_URLS = {
+      status: "{{ url_for('api_status') }}",
+      helperChat: "{{ url_for('api_helper_chat') }}",
+      helperClear: "{{ url_for('api_helper_clear') }}",
+      aiModels: "{{ url_for('api_ai_models') }}"
+    };
+  </script>
+</head>
+<body>
+  <div class="page-bg" aria-hidden="true"></div>
+  {% if session.get('authenticated') %}
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('dashboard') }}">
+      <span class="brand-mark"><i data-lucide="activity" class="icon"></i></span>
+      <span class="brand-name">{{ app_name }}</span>
+      <span class="brand-live" title="Live monitoring"><span class="live-dot"></span>LIVE</span>
+    </a>
+    <nav class="topnav">
+      <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}active{% endif %}">
+        <i data-lucide="heart-pulse" class="icon icon-sm"></i>Health board
+      </a>
+      <a href="{{ url_for('settings') }}" class="{% if request.endpoint == 'settings' %}active{% endif %}">
+        <i data-lucide="settings" class="icon icon-sm"></i>Settings
+      </a>
+      <button type="button" class="btn-helper-nav" id="helper-open" title="Ask Helper">
+        <i data-lucide="bot" class="icon icon-sm"></i>Helper
+        {% if agents_ready %}
+        <span class="dot-online" title="NVIDIA agents ready"></span>
+        {% else %}
+        <span class="dot-offline" title="API key missing"></span>
+        {% endif %}
+      </button>
+      <a href="{{ url_for('logout') }}" class="nav-muted">
+        <i data-lucide="log-out" class="icon icon-sm"></i>Logout
+      </a>
+    </nav>
+  </header>
+
+  <aside id="helper-drawer" class="helper-drawer" aria-hidden="true">
+    <header class="helper-head">
+      <div>
+        <p class="eyebrow"><i data-lucide="sparkles" class="icon icon-sm"></i> NVIDIA agent</p>
+        <h2><i data-lucide="bot" class="icon"></i> Helper</h2>
+      </div>
+      <div class="helper-head-actions">
+        <button type="button" class="btn btn-tiny" id="helper-clear">
+          <i data-lucide="eraser" class="icon icon-sm"></i>Clear
+        </button>
+        <button type="button" class="icon-close" id="helper-close" aria-label="Close">
+          <i data-lucide="x" class="icon icon-sm"></i>
+        </button>
+      </div>
+    </header>
+    <p class="helper-hint">
+      Ask about downtime, owners, or project health.
+      {% if nvidia_model %}<span class="tiny muted"> · {{ nvidia_model }}</span>{% endif %}
+    </p>
+    <div id="helper-messages" class="helper-messages"></div>
+    <form id="helper-form" class="helper-form">
+      <input type="text" id="helper-input" placeholder="What’s down right now?" maxlength="1000" autocomplete="off" />
+      <button type="submit" class="btn btn-primary">
+        <i data-lucide="send" class="icon icon-sm"></i>Send
+      </button>
+    </form>
+  </aside>
+  <div id="helper-backdrop" class="helper-backdrop" hidden></div>
+  {% endif %}
+
+  <main class="shell {% block shell_class %}{% endblock %}">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash-stack">
+        {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">
+          {% if category == 'success' %}
+          <i data-lucide="check-circle-2" class="icon"></i>
+          {% else %}
+          <i data-lucide="alert-circle" class="icon"></i>
+          {% endif %}
+          <span>{{ message }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=9"></script>
+  <script src="{{ url_for('static', filename='js/charts.js') }}?v=9"></script>
+  <script>lucide.createIcons();</script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

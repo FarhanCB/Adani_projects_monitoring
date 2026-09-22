@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Login — {{ app_name }}{% endblock %}
+{% block shell_class %}shell-center{% endblock %}
+{% block content %}
+<section class="auth-panel auth-panel-live">
+  <div class="brand-inline">
+    <div class="auth-icon"><i data-lucide="radar" class="icon icon-lg"></i></div>
+    <div>
+      <p class="eyebrow">Observability console</p>
+      <h1>{{ app_name }}</h1>
+    </div>
+  </div>
+  <p class="lede">Sign in as admin to monitor live project health, alerts, and AI insights.</p>
+  <form method="post" class="stack-form">
+    <label>
+      <span>Username</span>
+      <input type="text" name="username" required autofocus autocomplete="username" value="admin" />
+    </label>
+    <label>
+      <span>Password</span>
+      <input type="password" name="password" required autocomplete="current-password" />
+    </label>
+    <button type="submit" class="btn btn-primary">
+      <i data-lucide="log-in" class="icon"></i>Enter console
+    </button>
+  </form>
+</section>
+{% endblock %}
