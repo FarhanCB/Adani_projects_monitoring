@@ -91,60 +91,41 @@
   </div>
 
   <div class="settings-tab-panel {% if active_tab != 'ai' %}hidden{% endif %}" data-panel="ai">
-    <form method="post" class="stack-form settings-card" id="ai-form">
-      <input type="hidden" name="tab" value="ai" />
-      <input type="hidden" name="action" value="save_ai" />
+    <div class="settings-card">
       <header class="settings-card-head">
-        <h2><i data-lucide="cpu" class="icon"></i> Shared API · separate models</h2>
-        <p class="tiny muted">One API key and base URL. Pick different models for Analysis and Chatbot.</p>
+        <h2><i data-lucide="cpu" class="icon"></i> AI provider</h2>
+        <p class="tiny muted">Configured on the server via <code>.env</code> — not editable from this page.</p>
       </header>
-
-      <label>
-        <span>API key{% if ai_cfg.api_key_set %} <em class="tiny muted">(saved {{ ai_cfg.api_key_masked }} — leave blank to keep)</em>{% endif %}</span>
-        <input type="password" name="api_key" id="ai-api-key" value="" placeholder="{% if ai_cfg.api_key_set %}••••••••{% else %}nvapi-...{% endif %}" autocomplete="off" />
-      </label>
-
-      <label>
-        <span>Base URL</span>
-        <input type="url" name="base_url" id="ai-base-url" value="{{ ai_cfg.base_url }}" placeholder="https://integrate.api.nvidia.com/v1" />
-      </label>
-
-      <div class="ai-fetch-row">
-        <button type="button" class="btn btn-ghost" id="ai-fetch-models">
-          <i data-lucide="refresh-cw" class="icon"></i>Fetch models
-        </button>
-        <span class="tiny muted" id="ai-models-status">Uses GET /models on the base URL.</span>
-      </div>
 
       <div class="form-grid-2">
         <label>
-          <span>Analysis model</span>
-          <select name="analysis_model" id="ai-analysis-model">
-            {% if ai_cfg.analysis_model %}
-            <option value="{{ ai_cfg.analysis_model }}" selected>{{ ai_cfg.analysis_model }}</option>
-            {% else %}
-            <option value="">— Fetch models —</option>
-            {% endif %}
-          </select>
+          <span>Provider</span>
+          <input type="text" value="{{ ai_status.provider }}" disabled />
         </label>
         <label>
-          <span>Chatbot model</span>
-          <select name="chat_model" id="ai-chat-model">
-            {% if ai_cfg.chat_model %}
-            <option value="{{ ai_cfg.chat_model }}" selected>{{ ai_cfg.chat_model }}</option>
-            {% else %}
-            <option value="">— Fetch models —</option>
-            {% endif %}
-          </select>
+          <span>Model / deployment</span>
+          <input type="text" value="{{ ai_status.model or '—' }}" disabled />
         </label>
       </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">
-          <i data-lucide="save" class="icon"></i>Save AI config
-        </button>
-      </div>
-    </form>
+      <p class="tiny muted">
+        Status:
+        {% if ai_status.ready %}
+          <strong>Online</strong> — Analyst and Helper are active.
+        {% else %}
+          <strong>Offline</strong> — not configured.
+        {% endif %}
+      </p>
+
+      <p class="tiny muted">
+        To change provider or model, edit <code>LLM_PROVIDER</code> and either
+        <code>AZURE_OPENAI_KEY</code> / <code>AZURE_OPENAI_ENDPOINT</code> /
+        <code>AZURE_OPENAI_DEPLOYMENT</code> / <code>AZURE_OPENAI_API_VERSION</code>
+        (for <code>LLM_PROVIDER=azure</code>) or <code>NVIDIA_API_KEY</code> /
+        <code>NVIDIA_BASE_URL</code> / <code>NVIDIA_MODEL</code>
+        (for <code>LLM_PROVIDER=nvidia</code>) in <code>.env</code>, then restart the app.
+      </p>
+    </div>
   </div>
 
   <aside class="settings-note">
@@ -195,56 +176,6 @@
     });
   });
 
-  function fillSelect(select, models, current) {
-    const keep = current || select.value || "";
-    select.innerHTML = "";
-    if (!models.length) {
-      const opt = document.createElement("option");
-      opt.value = keep;
-      opt.textContent = keep || "— no models —";
-      select.appendChild(opt);
-      return;
-    }
-    models.forEach((id) => {
-      const opt = document.createElement("option");
-      opt.value = id;
-      opt.textContent = id;
-      if (id === keep) opt.selected = true;
-      select.appendChild(opt);
-    });
-    if (keep && !models.includes(keep)) {
-      const opt = document.createElement("option");
-      opt.value = keep;
-      opt.textContent = keep + " (saved)";
-      opt.selected = true;
-      select.prepend(opt);
-    }
-  }
-
-  const fetchBtn = document.getElementById("ai-fetch-models");
-  if (fetchBtn) {
-    fetchBtn.addEventListener("click", async () => {
-      const status = document.getElementById("ai-models-status");
-      status.textContent = "Fetching models…";
-      try {
-        const res = await fetch(window.API_URLS.aiModels, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            api_key: document.getElementById("ai-api-key").value,
-            base_url: document.getElementById("ai-base-url").value,
-          }),
-        });
-        const data = await res.json();
-        if (!data.ok) throw new Error(data.error || "Failed");
-        fillSelect(document.getElementById("ai-analysis-model"), data.models, "{{ ai_cfg.analysis_model }}");
-        fillSelect(document.getElementById("ai-chat-model"), data.models, "{{ ai_cfg.chat_model }}");
-        status.textContent = data.models.length + " models loaded.";
-      } catch (err) {
-        status.textContent = "Error: " + (err.message || err);
-      }
-    });
-  }
 })();
 </script>
 {% endblock %}
