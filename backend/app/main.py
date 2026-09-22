@@ -1,7 +1,13 @@
 import logging
+import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+
 from app.api import (
     analytics,
     auth,
@@ -34,12 +40,12 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables verified/created.")
 
-    # Auto-seed admin and sample projects if database is empty
+    # Auto-seed users and sample projects if database is empty
     db = SessionLocal()
     try:
         from app.models.user import User
         if db.query(User).count() == 0:
-            logger.info("Database is empty. Automatically initializing Admin and sample projects...")
+            logger.info("Database is empty. Automatically initializing users and sample projects...")
             try:
                 import seed_data
                 seed_data.seed()
@@ -49,7 +55,7 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    # 3. Start background monitoring scheduler
+    # Start background monitoring scheduler
     start_scheduler()
 
     yield
@@ -58,11 +64,6 @@ async def lifespan(app: FastAPI):
     logger.info("Stopping background scheduler and shutting down...")
     stop_scheduler()
 
-
-import os
-from fastapi.responses import FileResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi import HTTPException
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -83,7 +84,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------------------
 # Register API Routers under /dashboard/api (primary) and /api (alias)
+# IMPORTANT: These must be registered BEFORE the SPA catch-all routes below.
+# ---------------------------------------------------------------------------
 api_routers = [
     auth.router,
     projects.router,
@@ -101,52 +105,80 @@ for router in api_routers:
     if settings.API_V1_STR != "/api":
         app.include_router(router, prefix="/api")
 
-# Frontend Dist Path
+# ---------------------------------------------------------------------------
+# Static assets & SPA frontend
+# ---------------------------------------------------------------------------
 FRONTEND_DIST = os.path.abspath(
     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend", "dist")
 )
 
-# Mount static assets under /dashboard/assets (and /assets as fallback)
 if os.path.isdir(FRONTEND_DIST):
     assets_dir = os.path.join(FRONTEND_DIST, "assets")
     if os.path.isdir(assets_dir):
         app.mount("/dashboard/assets", StaticFiles(directory=assets_dir), name="dashboard-assets")
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    @app.get("/dashboard")
-    @app.get("/dashboard/")
-    @app.get("/dashboard/{full_path:path}")
-    async def serve_dashboard_spa(full_path: str = ""):
-        clean_path = full_path.strip("/")
-        # If unhandled API or docs call reached here, return 404
-        if clean_path.startswith("api") or clean_path in ["docs", "redoc", "openapi.json"]:
-            raise HTTPException(status_code=404, detail="Endpoint not found")
 
-        # Check if the requested file directly exists in dist (e.g. favicon, vite.svg)
-        target_file = os.path.join(FRONTEND_DIST, clean_path)
-        if clean_path and os.path.isfile(target_file):
+async def serve_dashboard_spa(request: Request) -> Response:
+    """
+    SPA fallback handler. Registered for ALL HTTP methods so it never causes a
+    405 error on API routes — the API routes registered above take priority in
+    FastAPI because they are added first and have more-specific paths.
+    """
+    full_path = request.path_params.get("full_path", "").strip("/")
+
+    # API / docs paths that weren't matched by the routers above → 404
+    if full_path.startswith("api") or full_path in ["docs", "redoc", "openapi.json"]:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+
+    # Serve real static files that exist in dist (favicon, icons, etc.)
+    if full_path:
+        target_file = os.path.join(FRONTEND_DIST, full_path)
+        if os.path.isfile(target_file):
             return FileResponse(target_file)
 
-        # Fallback to SPA index.html
-        index_file = os.path.join(FRONTEND_DIST, "index.html")
-        if os.path.isfile(index_file):
-            return FileResponse(index_file)
-        return {"app": settings.PROJECT_NAME, "status": "OPERATIONAL", "api_docs": "/dashboard/docs"}
+    # Fallback: return index.html so React Router can handle the path
+    index_file = os.path.join(FRONTEND_DIST, "index.html")
+    if os.path.isfile(index_file):
+        return FileResponse(index_file)
 
-# Redirect root and docs to /dashboard endpoints
+    return Response(
+        content='{"app":"Adani Monitoring","status":"OPERATIONAL"}',
+        media_type="application/json",
+    )
+
+
+# Register the SPA handler with ALL HTTP methods.
+# Using add_api_route instead of @app.get() avoids registering a GET-only
+# route that would shadow POST/PUT/DELETE API calls and cause 405 errors.
+for _spa_path in ["/dashboard", "/dashboard/", "/dashboard/{full_path:path}"]:
+    app.add_api_route(
+        _spa_path,
+        serve_dashboard_spa,
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+        include_in_schema=False,
+    )
+
+# ---------------------------------------------------------------------------
+# Convenience redirects
+# ---------------------------------------------------------------------------
+
 @app.get("/")
 def root_redirect():
     return RedirectResponse(url="/dashboard/", status_code=307)
+
 
 @app.get("/docs")
 def docs_redirect():
     return RedirectResponse(url="/dashboard/docs", status_code=307)
 
+
 @app.get("/redoc")
 def redoc_redirect():
     return RedirectResponse(url="/dashboard/redoc", status_code=307)
 
-# Catch-all redirect for paths accessed without /dashboard prefix
+
+# Catch-all: redirect bare paths (without /dashboard prefix) to /dashboard/...
 @app.get("/{full_path:path}")
 async def catch_all_redirect(full_path: str):
     clean = full_path.strip("/")
