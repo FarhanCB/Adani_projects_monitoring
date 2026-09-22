@@ -10,6 +10,17 @@ import requests
 import mailer
 import storage
 
+# Shared session for all outbound health checks.
+#
+# trust_env=False stops `requests` from picking up proxy settings from the
+# environment (HTTP_PROXY/HTTPS_PROXY env vars, Windows registry proxy,
+# .netrc). On the monitoring VM those proxy settings can't reach the
+# secured Adani-internal targets, which made every check fail as "Down"
+# even though the same VM can reach them directly. This mirrors the
+# working standalone monitor script's `session.trust_env = False`.
+session = requests.Session()
+session.trust_env = False
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -22,7 +33,7 @@ def check_url(entry: dict[str, Any]) -> dict[str, Any]:
     started = datetime.now(timezone.utc)
 
     try:
-        response = requests.get(
+        response = session.get(
             url,
             timeout=timeout,
             allow_redirects=True,
