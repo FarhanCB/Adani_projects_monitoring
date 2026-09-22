@@ -31,6 +31,11 @@ def _provider() -> str:
     return (os.getenv("LLM_PROVIDER") or "nvidia").strip().lower()
 
 
+def get_provider() -> str:
+    """Public accessor for the settings page — which provider is active."""
+    return _provider()
+
+
 def _ai_from_storage() -> dict[str, Any]:
     try:
         import storage

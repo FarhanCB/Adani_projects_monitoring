@@ -346,7 +346,6 @@ def check_url_now(project_id: str, url_id: str):
 def settings():
     settings_data = storage.get_settings()
     email_cfg = dict(settings_data.get("email") or storage.default_email_settings())
-    ai_cfg = dict(settings_data.get("ai") or storage.default_ai_settings())
     active_tab = request.args.get("tab") or "email"
 
     if request.method == "POST":
@@ -421,25 +420,6 @@ def settings():
                 flash(f"Test email failed: {result.get('error')}", "error")
             return redirect(url_for("settings", tab="email"))
 
-        if action == "save_ai":
-            from agents.llm import reset_llm_cache
-
-            api_key = request.form.get("api_key")
-            if api_key is None or api_key.strip() == "":
-                api_key = ai_cfg.get("api_key") or ""
-            else:
-                api_key = api_key.strip()
-            new_ai = {
-                "api_key": api_key,
-                "base_url": (request.form.get("base_url") or storage.default_ai_settings()["base_url"]).strip(),
-                "analysis_model": (request.form.get("analysis_model") or "").strip(),
-                "chat_model": (request.form.get("chat_model") or "").strip(),
-            }
-            storage.update_settings(ai=new_ai)
-            reset_llm_cache()
-            flash("AI configuration saved.", "success")
-            return redirect(url_for("settings", tab="ai"))
-
         if action == "change_password":
             current = request.form.get("current_password") or ""
             new_password = request.form.get("new_password") or ""
@@ -455,42 +435,26 @@ def settings():
                 flash("Admin password updated.", "success")
             return redirect(url_for("settings", tab=active_tab))
 
-    api_key = ai_cfg.get("api_key") or ""
-    ai_cfg_view = {
-        **ai_cfg,
-        "api_key_set": bool(api_key),
-        "api_key_masked": ("••••" + api_key[-4:]) if len(api_key) >= 4 else ("••••" if api_key else ""),
-    }
     email_cfg_view = {
         **email_cfg,
         "recipients_text": ", ".join(email_cfg.get("recipients") or []),
         "smtp_password_set": bool(email_cfg.get("smtp_password")),
     }
+    from agents.llm import get_model_name, get_provider
+
+    ai_status = {
+        "provider": get_provider(),
+        "model": get_model_name("chat") if agents_configured() else None,
+        "ready": agents_configured(),
+    }
     return render_template(
         "settings.html",
         email_cfg=email_cfg_view,
-        ai_cfg=ai_cfg_view,
+        ai_status=ai_status,
         active_tab=active_tab,
         agents_ready=agents_configured(),
         admin_user=auth.ADMIN_USERNAME,
     )
-
-
-@app.route("/dashboard/api/settings/ai/models", methods=["POST"])
-@auth.login_required
-def api_ai_models():
-    from agents.llm import list_models
-
-    data = request.get_json(silent=True) or {}
-    settings_data = storage.get_settings()
-    ai_cfg = settings_data.get("ai") or {}
-    api_key = (data.get("api_key") or "").strip() or (ai_cfg.get("api_key") or "").strip()
-    base_url = (data.get("base_url") or "").strip() or (ai_cfg.get("base_url") or "").strip()
-    try:
-        models = list_models(api_key=api_key or None, base_url=base_url or None)
-        return jsonify({"ok": True, "models": models})
-    except Exception as exc:  # noqa: BLE001
-        return jsonify({"ok": False, "error": str(exc), "models": []}), 400
 
 
 @app.route("/dashboard/api/status")
